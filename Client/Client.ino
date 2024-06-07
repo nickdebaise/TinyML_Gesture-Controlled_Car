@@ -1,27 +1,34 @@
-/**
- * Run a TensorFlow model to predict the IRIS dataset
- * For a complete guide, visit
- * https://eloquentarduino.com/tensorflow-lite-esp32
- */
-// replace with your own model
-// include BEFORE <eloquent_tinyml.h>!
-//#include "irisModel.h"
+/*
+Control a robotic car using gestures
+
+Author: Nick DeBaise, Austin Gregory
+*/
+
 #include "motionModel2.h"
-// include the runtime specific for your board
-// either tflm_esp32 or tflm_cortexm
-#include <tflm_esp32.h>  // install
-// now you can include the eloquent tinyml wrapper
-#include <eloquent_tinyml.h>  // install
+#include <tflm_esp32.h>
+#include <eloquent_tinyml.h>
+#include <WiFi.h> 
+#include <HTTPClient.h>
 
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <WebSocketsClient_Generic.h>
 
-// this is trial-and-error process
-// when developing a new model, start with a high value
-// (e.g. 10000), then decrease until the model stops
-// working as expected
-#define TF_NUM_OPS 2
+#define ARENA_SIZE 10000
+
+#define SCREEN_WIDTH 128  // OLED display width, in pixels
+#define SCREEN_HEIGHT 32  // OLED display height, in pixels
+
+const char* ssid = "ECE_328-AP"; 
+const char* password = "123456%!";
+
+WebSocketsClient webSocket;
+
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 Adafruit_MPU6050 mpu;
 
@@ -31,17 +38,30 @@ const int buttonPin = 32;
 const int ledPin1 = 26;
 const int ledPin2 = 27;
 
+int forwardsPin = 14;
+int backwardsPin = 13;
+int leftPin = 33;
+int rightPin = 12;
+
 int samples = 0;
-int interval = 2000;
-int curr_ledstate = 0;
+int gesture_detected;
 float s_data[600];
-String sensordata_ax;
-String sensordata_ay;
-String sensordata_az;
-String sensordata_gx;
-String sensordata_gy;
-String sensordata_gz;
-String sensordata = "";
+
+unsigned long ldt1 = 0;
+unsigned long ldt2 = 0;
+unsigned long ldt3 = 0;
+unsigned long ldt4 = 0;
+
+int bs1;
+int lbs1 = LOW;
+int bs2;
+int lbs2 = LOW;
+int bs3;
+int lbs3 = LOW;
+int bs4;
+int lbs4 = LOW;
+
+unsigned long debounceDelay = 50;
 
 void setup() {
   Serial.begin(115200);
@@ -60,91 +80,146 @@ void setup() {
 
   delay(100);
 
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ;
+  }
 
-  pinMode(buttonPin, INPUT);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+
   pinMode(ledPin1, OUTPUT);
   pinMode(ledPin2, OUTPUT);
+  pinMode(buttonPin, INPUT);
+  pinMode(leftPin, INPUT);
+  pinMode(rightPin, INPUT);
+  pinMode(backwardsPin, INPUT);
+  pinMode(forwardsPin, INPUT);
+
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting"); 
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("."); 
+  }
+
+  webSocket.begin("192.168.4.1", 81, "/");
+  Serial.println("WebSocket setup done.");
+  webSocket.setReconnectInterval(5000);
 
   Serial.println("MPU6050 Found!");
-  Serial.println("__TENSORFLOW IRIS__");
+  Serial.println("__LOAD TENSORFLOW GESTURE DETECTION MODEL__");
 
-  // configure input/output
-  // (not mandatory if you generated the .h model
-  // using the everywhereml Python package)
-  tf.setNumInputs(600);
-  tf.setNumOutputs(3);
-  // add required ops
-  // (not mandatory if you generated the .h model
-  // using the everywhereml Python package)
-  tf.resolver.AddFullyConnected();
-  tf.resolver.AddSoftmax();
-
-  while (!tf.begin(modelData).isOk())
+  while (!tf.begin(motionModel2).isOk())
     Serial.println(tf.exception.toString());
+
 }
 
+void loop() {  
+  webSocket.loop();
 
-void loop() {
-  // x0, x1, x2 are defined in the irisModel.h file
-  // https://github.com/eloquentarduino/EloquentTinyML/tree/main/examples/IrisExample/irisModel.h
+  int goLeft = digitalRead(leftPin);
+  int goRight = digitalRead(rightPin);
+  int goForwards = digitalRead(forwardsPin);
+  int goBackwards = digitalRead(backwardsPin);
 
+  if(goLeft != lbs1) {
+    ldt1 = millis();
+  }
+
+  if(goRight != lbs2) {
+    ldt2 = millis();
+  }
+
+  if(goForwards != lbs3) {
+    ldt3 = millis();
+  }
+
+  if(goBackwards != lbs4) {
+    ldt4 = millis();
+  }
+
+  if ((millis() - ldt1) > debounceDelay) {
+    if (goLeft != bs1) {
+      bs1 = goLeft;
+      if (bs1 == HIGH) {
+        Serial.println("Pressed");
+        webSocket.sendTXT("3");
+      }
+    }
+  }
+
+   if ((millis() - ldt2) > debounceDelay) {
+    if (goRight != bs2) {
+      bs2 = goRight;
+      if (bs2 == HIGH) {
+        Serial.println("Pressed");
+        webSocket.sendTXT("2");
+      }
+    }
+  }
+
+   if ((millis() - ldt3) > debounceDelay) {
+    if (goForwards != bs3) {
+      bs3 = goForwards;
+      if (bs3 == HIGH) {
+        Serial.println("Pressed");
+        webSocket.sendTXT("1");
+      }
+    }
+  }
+
+   if ((millis() - ldt4) > debounceDelay) {
+    if (goBackwards != bs4) {
+      bs4 = goBackwards;
+      if (bs4 == HIGH) {
+        Serial.println("Pressed");
+        webSocket.sendTXT("4");
+      }
+    }
+  }
+
+  lbs1 = goLeft;
+  lbs2 = goRight;
+  lbs3 = goForwards;
+  lbs4 = goBackwards;
 
   if (digitalRead(buttonPin) == HIGH) {
     while (digitalRead(buttonPin) == HIGH) {
       delay(10);
     }
-    sensordata.clear();
-    sensordata_ax.clear();
-    sensordata_ay.clear();
-    sensordata_az.clear();
-    sensordata_gx.clear();
-    sensordata_gy.clear();
-    sensordata_gz.clear();
 
     samples = 0;
 
-    while (samples <= 99) {      // collect 200 data points
-      
+    while (samples <= 99) {
 
       /* Get new sensor events with the readings */
       sensors_event_t a, g, temp;
       mpu.getEvent(&a, &g, &temp);
       digitalWrite(ledPin1, HIGH);
 
-      sensordata_ax += a.acceleration.x;
-      s_data[samples] = a.acceleration.x;
-      sensordata_ax += "\t";
-      sensordata_ay += a.acceleration.y;
-      s_data[100+samples] = a.acceleration.y;
-      sensordata_ay += "\t";
-      sensordata_az += a.acceleration.z;
-      s_data[200+samples] = a.acceleration.z;
-      sensordata_az += "\t";
-      sensordata_gx += g.gyro.x;
-      s_data[300+samples] = g.gyro.x;
-      sensordata_gx += "\t";
-      sensordata_gy += g.gyro.y;
-      s_data[400+samples] = g.gyro.y;
-      sensordata_gy += "\t";
-      sensordata_gz += g.gyro.z;
-      s_data[500+samples] = g.gyro.z;
-      sensordata_gz += "\t";
-      delay(10);  //Set sampling rate to 100Hz
+      s_data[samples] = a.acceleration.x;        //first 100 data in array set to accel_x to match the data collection order
+      s_data[100 + samples] = a.acceleration.y;  //next  100 data in array set to accel_y to match the data collection order
+      s_data[200 + samples] = a.acceleration.z;  //next  100 data in array set to accel_z to match the data collection order
+      s_data[300 + samples] = g.gyro.x;          //next  100 data in array set to gyro_x to match the data collection order
+      s_data[400 + samples] = g.gyro.y;          //next  100 data in array set to gyro_y to match the data collection order
+      s_data[500 + samples] = g.gyro.z;          //next  100 data in array set to gyro_z to match the data collection order
+      delay(10);                                 //Set sampling rate to 100Hz (must match the sampling frequency used in training data collection)
       samples = samples + 1;
     }
-    
-    sensordata = sensordata_ax + sensordata_ay + sensordata_az + sensordata_gx + sensordata_gy + sensordata_gz;
+
     digitalWrite(ledPin1, LOW);
-    
 
     int n = 600;
-    for (int i = 0; i < n; i++){
+    for (int i = 0; i < n; i++) {
       Serial.print(s_data[i]);
       Serial.print("   ");
     }
     Serial.println();
-    delay(5); 
-  
+    delay(5);
 
     if (!tf.predict(s_data).isOk()) {
       Serial.println(tf.exception.toString());
@@ -153,8 +228,16 @@ void loop() {
     Serial.print("Predicting motion based on sensor data: ");
     Serial.println(tf.classification);
 
-    delay(1000);
+    gesture_detected = tf.classification;
+    gesture_detected++;
 
+    webSocket.sendTXT(String(gesture_detected));
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("Gesture: ");
+    display.print(gesture_detected );
+    display.display();
   }
-
 }
+
