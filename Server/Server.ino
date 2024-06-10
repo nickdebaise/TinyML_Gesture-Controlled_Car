@@ -5,9 +5,6 @@
 #include <Adafruit_MPU6050.h>
 #include <WebSocketsServer.h>  // Include WebSockets Library by Markus Sattler
 
-
-
-
 const int AIN1 = 22;
 const int AIN2 = 21;
 const int BIN1 = 18;
@@ -16,21 +13,15 @@ const int PWMA = 23;
 const int PWMB = 16;
 const int STBY = 19;
 
-
-
 const char* ssid     = "ECE_328-AP";
 const char* password = "123456%!";
-
 
 int interval = 1000; // virtual delay
 unsigned long previousMillis = 0; // Tracks the time since last event fired
 
-
-
-
-
-
 WebSocketsServer webSocket = WebSocketsServer(81);  //create instance for webSocket server on port"81"
+
+// Function to stop the wheels
 void brake(){
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
@@ -41,6 +32,7 @@ void brake(){
   delay(200);
 }
 
+// Function to move the car forward
 void goForward(){
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
@@ -52,8 +44,7 @@ void goForward(){
   brake();
 }
 
-
-
+// Function to turn the car right
 void turnRight(){
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
@@ -65,6 +56,7 @@ void turnRight(){
   brake();
 }
 
+// Function to turn the car left
 void turnLeft(){
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
@@ -76,6 +68,7 @@ void turnLeft(){
   brake();
 }
 
+// Function to move the car backwards
 void goBackward(){
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, HIGH);
@@ -87,6 +80,7 @@ void goBackward(){
   brake();
 }
 
+// Function to make a 180 degree turn
 void Uturn(){
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
@@ -101,7 +95,6 @@ void Uturn(){
 
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
   pinMode(PWMA, OUTPUT);
@@ -114,16 +107,9 @@ void setup() {
   Serial.begin(115200); // Init Serial for Debugging.
  
  
- 
- 
-  WiFi.softAP(ssid, password); // Connect to Wifi
-  // while (WiFi.status() != WL_CONNECTED) { // Check if wifi is connected or not
-  //   delay(500);
-  //   Serial.print(".");
-  // }
+  WiFi.softAP(ssid, password); // set up as access point
   
   delay(2000); // wait for 2s
-
 
   // Print the IP address in the serial monitor windows.
   Serial.print("IP address: ");
@@ -138,9 +124,6 @@ void setup() {
 void loop() {
   webSocket.loop(); // websocket server methode that handles all Client
   unsigned long currentMillis = millis(); // call millis  and Get snapshot of time
-
-
-
 }
 
 
